@@ -38,8 +38,10 @@ export default async function handler(req, res) {
         home: {
           name:
             home?.team?.displayName || null,
+
           score:
-            home?.score || "0",
+            home?.score ?? "-",
+
           logo:
             home?.team?.logo || null
         },
@@ -47,8 +49,10 @@ export default async function handler(req, res) {
         away: {
           name:
             away?.team?.displayName || null,
+
           score:
-            away?.score || "0",
+            away?.score ?? "-",
+
           logo:
             away?.team?.logo || null
         },
@@ -61,9 +65,15 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      timezone: "Europe/Rome",
+
+      timezone:
+        "Europe/Rome",
+
       league,
-      count: matches.length,
+
+      count:
+        matches.length,
+
       matches
     });
 
@@ -73,7 +83,9 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       success: false,
-      error: error.message
+
+      error:
+        error.message
     });
   }
 }
