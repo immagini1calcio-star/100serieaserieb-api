@@ -2,7 +2,18 @@ import competitions from "../lib/competitions.js";
 
 const TIMEZONE = "Europe/Rome";
 
+/* =========================================
+   DATA E ORA ITALIANA
+========================================= */
+
 function getItalianParts(isoDate) {
+  if (!isoDate) {
+    return {
+      date: null,
+      time: null
+    };
+  }
+
   const date = new Date(isoDate);
 
   if (Number.isNaN(date.getTime())) {
@@ -29,7 +40,12 @@ function getItalianParts(isoDate) {
   };
 }
 
-function getItalianDateForESPN(date) {
+
+/* =========================================
+   DATA ITALIANA PER ESPN
+========================================= */
+
+function getESPNDate(date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: TIMEZONE,
     year: "numeric",
@@ -37,74 +53,152 @@ function getItalianDateForESPN(date) {
     day: "2-digit"
   }).formatToParts(date);
 
-  const year = parts.find(p => p.type === "year")?.value;
-  const month = parts.find(p => p.type === "month")?.value;
-  const day = parts.find(p => p.type === "day")?.value;
+  const year =
+    parts.find(
+      part => part.type === "year"
+    )?.value;
+
+  const month =
+    parts.find(
+      part => part.type === "month"
+    )?.value;
+
+  const day =
+    parts.find(
+      part => part.type === "day"
+    )?.value;
 
   return `${year}${month}${day}`;
 }
 
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setUTCDate(result.getUTCDate() + days);
+
+/* =========================================
+   AGGIUNGI GIORNI
+========================================= */
+
+function addDays(date, amount) {
+  const result =
+    new Date(date);
+
+  result.setUTCDate(
+    result.getUTCDate() + amount
+  );
+
   return result;
 }
 
+
+/* =========================================
+   TROVA IL PROSSIMO GIOVEDÌ
+========================================= */
+
 function getNextThursday() {
-  const now = new Date();
-
-  const italianDay = Number(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: TIMEZONE,
-      weekday: "numeric"
-    }).format(now)
-  );
+  const now =
+    new Date();
 
   /*
-   * weekday numeric non è affidabile in tutti gli ambienti,
-   * quindi calcoliamo il giorno usando la data italiana.
-   */
-
-  const italianDateString =
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: TIMEZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }).format(now);
-
-  const current = new Date(
-    `${italianDateString}T12:00:00Z`
-  );
-
-  const day = current.getUTCDay();
-
-  /*
-   * 0 = domenica
+   * Otteniamo il giorno della settimana
+   * nella timezone italiana.
+   *
    * 1 = lunedì
    * 2 = martedì
    * 3 = mercoledì
    * 4 = giovedì
+   * 5 = venerdì
+   * 6 = sabato
+   * 7 = domenica
+   */
+
+  const weekday =
+    new Intl.DateTimeFormat(
+      "it-IT",
+      {
+        timeZone: TIMEZONE,
+        weekday: "long"
+      }
+    ).format(now);
+
+  const days = [
+    "domenica",
+    "lunedì",
+    "martedì",
+    "mercoledì",
+    "giovedì",
+    "venerdì",
+    "sabato"
+  ];
+
+  const currentIndex =
+    days.indexOf(weekday);
+
+  /*
+   * Giovedì = 4
    */
 
   let daysUntilThursday =
-    (4 - day + 7) % 7;
+    (4 - currentIndex + 7) % 7;
 
   /*
-   * Se oggi è giovedì, includiamo oggi.
+   * Se oggi è giovedì,
+   * partiamo da oggi.
    */
 
-  const thursday =
-    addDays(current, daysUntilThursday);
+  return addDays(
+    new Date(
+      Date.UTC(
+        Number(
+          new Intl.DateTimeFormat(
+            "en-US",
+            {
+              timeZone: TIMEZONE,
+              year: "numeric"
+            }
+          ).format(now)
+        ),
 
-  return thursday;
+        Number(
+          new Intl.DateTimeFormat(
+            "en-US",
+            {
+              timeZone: TIMEZONE,
+              month: "numeric"
+            }
+          ).format(now)
+        ) - 1,
+
+        Number(
+          new Intl.DateTimeFormat(
+            "en-US",
+            {
+              timeZone: TIMEZONE,
+              day: "numeric"
+            }
+          ).format(now)
+        ),
+
+        12,
+        0,
+        0
+      )
+    ),
+    daysUntilThursday
+  );
 }
 
-async function getESPNDay(league, date) {
+
+/* =========================================
+   CHIAMATA ESPN
+========================================= */
+
+async function getESPNDay(
+  league,
+  date
+) {
   const url =
     `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${date}`;
 
-  const response = await fetch(url);
+  const response =
+    await fetch(url);
 
   if (!response.ok) {
     throw new Error(
@@ -115,45 +209,34 @@ async function getESPNDay(league, date) {
   return await response.json();
 }
 
-function getTeam(team) {
-  if (!team) return null;
 
-  return {
-    name:
-      team.team?.displayName ||
-      team.team?.name ||
-      null,
+/* =========================================
+   FORMAT PARTITA
+========================================= */
 
-    score:
-      team.score ?? null,
-
-    logo:
-      team.team?.logo ||
-      null
-  };
-}
-
-function formatMatch(event, competition) {
-  const game =
+function formatMatch(
+  event
+) {
+  const competition =
     event.competitions?.[0];
 
-  const teams =
-    game?.competitors || [];
+  const competitors =
+    competition?.competitors || [];
 
   const home =
-    teams.find(
+    competitors.find(
       team =>
         team.homeAway === "home"
     );
 
   const away =
-    teams.find(
+    competitors.find(
       team =>
         team.homeAway === "away"
     );
 
   const status =
-    game?.status;
+    competition?.status;
 
   const statusType =
     status?.type;
@@ -163,10 +246,15 @@ function formatMatch(event, competition) {
       event.date
     );
 
+  /*
+   * Partita non ancora iniziata.
+   */
+
   const notStarted =
     statusType?.state === "pre";
 
   return {
+
     id:
       event.id,
 
@@ -180,6 +268,7 @@ function formatMatch(event, competition) {
       TIMEZONE,
 
     home: {
+
       name:
         home?.team?.displayName ||
         null,
@@ -187,7 +276,10 @@ function formatMatch(event, competition) {
       score:
         notStarted
           ? "-"
-          : (home?.score ?? 0),
+          : (
+              home?.score ??
+              0
+            ),
 
       logo:
         home?.team?.logo ||
@@ -195,6 +287,7 @@ function formatMatch(event, competition) {
     },
 
     away: {
+
       name:
         away?.team?.displayName ||
         null,
@@ -202,7 +295,10 @@ function formatMatch(event, competition) {
       score:
         notStarted
           ? "-"
-          : (away?.score ?? 0),
+          : (
+              away?.score ??
+              0
+            ),
 
       logo:
         away?.team?.logo ||
@@ -210,6 +306,7 @@ function formatMatch(event, competition) {
     },
 
     status: {
+
       state:
         statusType?.state ||
         null,
@@ -237,77 +334,117 @@ function formatMatch(event, competition) {
   };
 }
 
-export default async function handler(req, res) {
+
+/* =========================================
+   API
+========================================= */
+
+export default async function handler(
+  req,
+  res
+) {
+
   try {
 
     const requestedCompetition =
       req.query.competition;
 
+
+    /* =====================================
+       COMPETIZIONE OBBLIGATORIA
+    ===================================== */
+
     if (!requestedCompetition) {
+
       return res.status(400).json({
+
         success: false,
+
         error:
           "Inserisci una competizione"
+
       });
     }
+
+
+    /* =====================================
+       CERCA COMPETIZIONE
+    ===================================== */
 
     const competition =
       competitions[
         requestedCompetition
       ];
 
+
     if (!competition) {
+
       return res.status(404).json({
+
         success: false,
+
         error:
           "Competizione non trovata",
 
         available:
-          Object.keys(competitions)
+          Object.keys(
+            competitions
+          )
+
       });
     }
+
+
+    /* =====================================
+       CODICE ESPN
+    ===================================== */
 
     if (!competition.league) {
+
       return res.status(400).json({
+
         success: false,
+
         error:
-          "Questa competizione non ha ancora un codice ESPN"
+          "Questa competizione non ha un codice ESPN"
+
       });
     }
 
-    /*
-     * =====================================
-     * PROSSIMA GIORNATA
-     *
-     * GIOVEDÌ → MARTEDÌ
-     * =====================================
-     */
+
+    /* =====================================
+       PROSSIMO GIOVEDÌ
+    ===================================== */
 
     const thursday =
       getNextThursday();
 
+
     const matches = [];
 
-    /*
-     * 6 giorni:
-     *
-     * Giovedì
-     * Venerdì
-     * Sabato
-     * Domenica
-     * Lunedì
-     * Martedì
-     */
 
-    for (let i = 0; i < 6; i++) {
+    /* =====================================
+       GIOVEDÌ → MARTEDÌ
+    ===================================== */
 
-      const day =
-        addDays(thursday, i);
+    for (
+      let i = 0;
+      i < 6;
+      i++
+    ) {
+
+      const currentDay =
+        addDays(
+          thursday,
+          i
+        );
+
 
       const espnDate =
-        getItalianDateForESPN(
-          day
+        getESPNDate(
+          currentDay
         );
+
 
       const data =
         await getESPNDay(
@@ -315,79 +452,97 @@ export default async function handler(req, res) {
           espnDate
         );
 
+
       const events =
         data.events || [];
 
-      for (const event of events) {
+
+      for (
+        const event of events
+      ) {
 
         matches.push(
           formatMatch(
-            event,
-            {
-              id:
-                requestedCompetition,
-
-              name:
-                competition.name,
-
-              country:
-                competition.country,
-
-              flag:
-                competition.flag
-            }
+            event
           )
         );
+
       }
+
     }
 
-    /*
-     * Ordine cronologico.
-     */
 
-    matches.sort((a, b) => {
+    /* =====================================
+       ORDINA PER DATA E ORA
+    ===================================== */
 
-      const dateA =
-        `${a.date || ""} ${a.time || ""}`;
+    matches.sort(
+      (a, b) => {
 
-      const dateB =
-        `${b.date || ""} ${b.time || ""}`;
+        const dateA =
+          `${a.date || ""} ${a.time || ""}`;
 
-      return dateA.localeCompare(
-        dateB
-      );
-    });
+        const dateB =
+          `${b.date || ""} ${b.time || ""}`;
+
+        return dateA.localeCompare(
+          dateB
+        );
+
+      }
+    );
+
+
+    /* =====================================
+       RISPOSTA
+    ===================================== */
 
     return res.status(200).json({
 
       success: true,
 
-      source: "ESPN",
+      source:
+        "ESPN",
 
       timezone:
         TIMEZONE,
 
+      league:
+        competition.league,
+
       competition: {
+
         id:
           requestedCompetition,
 
         name:
           competition.name,
 
-        league:
-          competition.league
+        country:
+          competition.country,
+
+        flag:
+          competition.flag
+
       },
 
       period: {
-        from: "Thursday",
-        to: "Tuesday"
+
+        from:
+          "giovedì",
+
+        to:
+          "martedì"
+
       },
 
       count:
         matches.length,
 
       matches
+
     });
+
 
   } catch (error) {
 
@@ -396,15 +551,20 @@ export default async function handler(req, res) {
       error
     );
 
+
     return res.status(500).json({
 
       success: false,
 
-      source: "ESPN",
+      source:
+        "ESPN",
 
       error:
         error.message ||
         "Errore ESPN"
+
     });
+
   }
+
 }
