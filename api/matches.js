@@ -6,14 +6,7 @@ const TIMEZONE = "Europe/Rome";
    DATA E ORA ITALIANA
 ========================================= */
 
-function getItalianParts(isoDate) {
-  if (!isoDate) {
-    return {
-      date: null,
-      time: null
-    };
-  }
-
+function getItalianDateTime(isoDate) {
   const date = new Date(isoDate);
 
   if (Number.isNaN(date.getTime())) {
@@ -42,33 +35,39 @@ function getItalianParts(isoDate) {
 
 
 /* =========================================
-   DATA ITALIANA PER ESPN
+   OTTIENI LA DATA ITALIANA DI OGGI
+   FORMATO: YYYY-MM-DD
 ========================================= */
 
-function getESPNDate(date) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+function getTodayItaly() {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).formatToParts(date);
+  }).formatToParts(new Date());
 
   const year =
-    parts.find(
-      part => part.type === "year"
-    )?.value;
+    parts.find(p => p.type === "year").value;
 
   const month =
-    parts.find(
-      part => part.type === "month"
-    )?.value;
+    parts.find(p => p.type === "month").value;
 
   const day =
-    parts.find(
-      part => part.type === "day"
-    )?.value;
+    parts.find(p => p.type === "day").value;
 
-  return `${year}${month}${day}`;
+  return `${year}-${month}-${day}`;
+}
+
+
+/* =========================================
+   DATA YYYY-MM-DD → OGGETTO DATE
+========================================= */
+
+function parseItalyDate(dateString) {
+  return new Date(
+    `${dateString}T12:00:00Z`
+  );
 }
 
 
@@ -77,8 +76,7 @@ function getESPNDate(date) {
 ========================================= */
 
 function addDays(date, amount) {
-  const result =
-    new Date(date);
+  const result = new Date(date);
 
   result.setUTCDate(
     result.getUTCDate() + amount
@@ -89,100 +87,60 @@ function addDays(date, amount) {
 
 
 /* =========================================
-   TROVA IL PROSSIMO GIOVEDÌ
+   PROSSIMO GIOVEDÌ
 ========================================= */
 
 function getNextThursday() {
-  const now =
-    new Date();
+  const todayString =
+    getTodayItaly();
+
+  const today =
+    parseItalyDate(todayString);
 
   /*
-   * Otteniamo il giorno della settimana
-   * nella timezone italiana.
+   * JavaScript:
    *
+   * 0 = domenica
    * 1 = lunedì
    * 2 = martedì
    * 3 = mercoledì
    * 4 = giovedì
    * 5 = venerdì
    * 6 = sabato
-   * 7 = domenica
    */
 
-  const weekday =
-    new Intl.DateTimeFormat(
-      "it-IT",
-      {
-        timeZone: TIMEZONE,
-        weekday: "long"
-      }
-    ).format(now);
-
-  const days = [
-    "domenica",
-    "lunedì",
-    "martedì",
-    "mercoledì",
-    "giovedì",
-    "venerdì",
-    "sabato"
-  ];
-
-  const currentIndex =
-    days.indexOf(weekday);
-
-  /*
-   * Giovedì = 4
-   */
+  const currentDay =
+    today.getUTCDay();
 
   let daysUntilThursday =
-    (4 - currentIndex + 7) % 7;
-
-  /*
-   * Se oggi è giovedì,
-   * partiamo da oggi.
-   */
+    (4 - currentDay + 7) % 7;
 
   return addDays(
-    new Date(
-      Date.UTC(
-        Number(
-          new Intl.DateTimeFormat(
-            "en-US",
-            {
-              timeZone: TIMEZONE,
-              year: "numeric"
-            }
-          ).format(now)
-        ),
-
-        Number(
-          new Intl.DateTimeFormat(
-            "en-US",
-            {
-              timeZone: TIMEZONE,
-              month: "numeric"
-            }
-          ).format(now)
-        ) - 1,
-
-        Number(
-          new Intl.DateTimeFormat(
-            "en-US",
-            {
-              timeZone: TIMEZONE,
-              day: "numeric"
-            }
-          ).format(now)
-        ),
-
-        12,
-        0,
-        0
-      )
-    ),
+    today,
     daysUntilThursday
   );
+}
+
+
+/* =========================================
+   CONVERTI DATA IN YYYYMMDD PER ESPN
+========================================= */
+
+function getESPNDate(date) {
+  const year =
+    date.getUTCFullYear();
+
+  const month =
+    String(
+      date.getUTCMonth() + 1
+    ).padStart(2, "0");
+
+  const day =
+    String(
+      date.getUTCDate()
+    ).padStart(2, "0");
+
+  return `${year}${month}${day}`;
 }
 
 
@@ -214,9 +172,7 @@ async function getESPNDay(
    FORMAT PARTITA
 ========================================= */
 
-function formatMatch(
-  event
-) {
+function formatMatch(event) {
   const competition =
     event.competitions?.[0];
 
@@ -242,19 +198,22 @@ function formatMatch(
     status?.type;
 
   const italian =
-    getItalianParts(
+    getItalianDateTime(
       event.date
     );
 
   /*
-   * Partita non ancora iniziata.
+   * ESPN normalmente usa:
+   *
+   * state = pre  → non iniziata
+   * state = in   → in corso
+   * state = post → terminata
    */
 
   const notStarted =
     statusType?.state === "pre";
 
   return {
-
     id:
       event.id,
 
@@ -268,7 +227,6 @@ function formatMatch(
       TIMEZONE,
 
     home: {
-
       name:
         home?.team?.displayName ||
         null,
@@ -276,10 +234,7 @@ function formatMatch(
       score:
         notStarted
           ? "-"
-          : (
-              home?.score ??
-              0
-            ),
+          : (home?.score ?? 0),
 
       logo:
         home?.team?.logo ||
@@ -287,7 +242,6 @@ function formatMatch(
     },
 
     away: {
-
       name:
         away?.team?.displayName ||
         null,
@@ -295,10 +249,7 @@ function formatMatch(
       score:
         notStarted
           ? "-"
-          : (
-              away?.score ??
-              0
-            ),
+          : (away?.score ?? 0),
 
       logo:
         away?.team?.logo ||
@@ -306,7 +257,6 @@ function formatMatch(
     },
 
     status: {
-
       state:
         statusType?.state ||
         null,
@@ -343,95 +293,64 @@ export default async function handler(
   req,
   res
 ) {
-
   try {
 
     const requestedCompetition =
       req.query.competition;
 
-
-    /* =====================================
-       COMPETIZIONE OBBLIGATORIA
-    ===================================== */
+    /* -------------------------------------
+       CONTROLLO COMPETIZIONE
+    ------------------------------------- */
 
     if (!requestedCompetition) {
-
       return res.status(400).json({
-
         success: false,
-
         error:
           "Inserisci una competizione"
-
       });
     }
-
-
-    /* =====================================
-       CERCA COMPETIZIONE
-    ===================================== */
 
     const competition =
       competitions[
         requestedCompetition
       ];
 
-
     if (!competition) {
-
       return res.status(404).json({
-
         success: false,
-
         error:
           "Competizione non trovata",
-
         available:
-          Object.keys(
-            competitions
-          )
-
+          Object.keys(competitions)
       });
     }
 
-
-    /* =====================================
-       CODICE ESPN
-    ===================================== */
+    /* -------------------------------------
+       CONTROLLO CODICE ESPN
+    ------------------------------------- */
 
     if (!competition.league) {
-
       return res.status(400).json({
-
         success: false,
-
         error:
           "Questa competizione non ha un codice ESPN"
-
       });
     }
 
-
-    /* =====================================
+    /* -------------------------------------
        PROSSIMO GIOVEDÌ
-    ===================================== */
+    ------------------------------------- */
 
     const thursday =
       getNextThursday();
 
-
     const matches = [];
 
-
-    /* =====================================
+    /* -------------------------------------
        GIOVEDÌ → MARTEDÌ
-    ===================================== */
+    ------------------------------------- */
 
-    for (
-      let i = 0;
-      i < 6;
-      i++
-    ) {
+    for (let i = 0; i < 6; i++) {
 
       const currentDay =
         addDays(
@@ -439,12 +358,10 @@ export default async function handler(
           i
         );
 
-
       const espnDate =
         getESPNDate(
           currentDay
         );
-
 
       const data =
         await getESPNDay(
@@ -452,50 +369,37 @@ export default async function handler(
           espnDate
         );
 
-
       const events =
         data.events || [];
 
-
-      for (
-        const event of events
-      ) {
+      for (const event of events) {
 
         matches.push(
-          formatMatch(
-            event
-          )
+          formatMatch(event)
         );
-
       }
-
     }
 
+    /* -------------------------------------
+       ORDINA PARTITE
+    ------------------------------------- */
 
-    /* =====================================
-       ORDINA PER DATA E ORA
-    ===================================== */
+    matches.sort((a, b) => {
 
-    matches.sort(
-      (a, b) => {
+      const dateA =
+        `${a.date || ""} ${a.time || ""}`;
 
-        const dateA =
-          `${a.date || ""} ${a.time || ""}`;
+      const dateB =
+        `${b.date || ""} ${b.time || ""}`;
 
-        const dateB =
-          `${b.date || ""} ${b.time || ""}`;
+      return dateA.localeCompare(
+        dateB
+      );
+    });
 
-        return dateA.localeCompare(
-          dateB
-        );
-
-      }
-    );
-
-
-    /* =====================================
+    /* -------------------------------------
        RISPOSTA
-    ===================================== */
+    ------------------------------------- */
 
     return res.status(200).json({
 
@@ -511,7 +415,6 @@ export default async function handler(
         competition.league,
 
       competition: {
-
         id:
           requestedCompetition,
 
@@ -523,26 +426,21 @@ export default async function handler(
 
         flag:
           competition.flag
-
       },
 
       period: {
-
         from:
           "giovedì",
 
         to:
           "martedì"
-
       },
 
       count:
         matches.length,
 
       matches
-
     });
-
 
   } catch (error) {
 
@@ -550,7 +448,6 @@ export default async function handler(
       "ESPN ERROR:",
       error
     );
-
 
     return res.status(500).json({
 
@@ -564,7 +461,5 @@ export default async function handler(
         "Errore ESPN"
 
     });
-
   }
-
 }
