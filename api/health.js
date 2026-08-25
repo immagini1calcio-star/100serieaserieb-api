@@ -1,8 +1,7 @@
 export default function handler(req, res) {
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
-    api: "100%SerieA&SerieB",
-    status: "online",
-    message: "API funzionante!"
+    version: "TEST-2026-08-25-001",
+    message: "NUOVO CODICE VERCEL"
   });
 }
