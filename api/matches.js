@@ -30,6 +30,46 @@ export default async function handler(req, res) {
           team => team.homeAway === "away"
         );
 
+      /*
+       * Stato della partita
+       */
+      const status =
+        competition?.status;
+
+      const statusType =
+        status?.type;
+
+      /*
+       * Controlliamo se la partita
+       * è già iniziata.
+       *
+       * Se completed = false e lo stato
+       * è pregame, mostriamo "-".
+       */
+      const isNotStarted =
+        statusType?.state === "pre" ||
+        statusType?.name === "STATUS_SCHEDULED" ||
+        statusType?.name === "STATUS_PRE";
+
+      /*
+       * Punteggio.
+       *
+       * Una partita non iniziata:
+       * -
+       *
+       * Una partita iniziata:
+       * 0, 1, 2, ecc.
+       */
+      const homeScore =
+        isNotStarted
+          ? "-"
+          : (home?.score ?? "0");
+
+      const awayScore =
+        isNotStarted
+          ? "-"
+          : (away?.score ?? "0");
+
       return {
         id: event.id,
 
@@ -37,29 +77,55 @@ export default async function handler(req, res) {
 
         home: {
           name:
-            home?.team?.displayName || null,
+            home?.team?.displayName ||
+            null,
 
           score:
-            home?.score ?? "-",
+            homeScore,
 
           logo:
-            home?.team?.logo || null
+            home?.team?.logo ||
+            null
         },
 
         away: {
           name:
-            away?.team?.displayName || null,
+            away?.team?.displayName ||
+            null,
 
           score:
-            away?.score ?? "-",
+            awayScore,
 
           logo:
-            away?.team?.logo || null
+            away?.team?.logo ||
+            null
         },
 
-        status:
-          competition?.status?.type?.description ||
-          null
+        status: {
+          state:
+            statusType?.state ||
+            null,
+
+          name:
+            statusType?.name ||
+            null,
+
+          description:
+            statusType?.description ||
+            null,
+
+          detail:
+            statusType?.detail ||
+            null,
+
+          clock:
+            status?.displayClock ||
+            null,
+
+          completed:
+            statusType?.completed ??
+            false
+        }
       };
     });
 
